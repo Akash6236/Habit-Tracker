@@ -254,8 +254,9 @@ function Controls({
       </div>
     );
   }
-  // counter / duration
-  const step = habit.type === "duration" ? 5 : Math.max(1, Math.round((habit.target ?? 10) / 10));
+  // counter / duration — duration always +1 (min/hr per tap); counter scales with target
+  const step =
+    habit.type === "duration" ? 1 : Math.max(1, Math.round((habit.target ?? 10) / 10));
   const v = entry?.value ?? 0;
   return (
     <div className="flex items-center gap-1.5">
