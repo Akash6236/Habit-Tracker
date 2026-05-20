@@ -181,15 +181,8 @@ export function TodayPage({ onGoTo }: Props) {
             <MoodPicker value={day?.mood} onChange={(v) => patchDay({ mood: v })} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <NumberField
-              icon={<Moon size={14} />}
-              label="Sleep"
-              unit="hrs"
+            <SleepHoursField
               value={day?.sleepHours}
-              step={1}
-              min={0}
-              max={24}
-              placeholder="7"
               onChange={(v) => patchDay({ sleepHours: v })}
             />
             <NumberField
@@ -314,6 +307,94 @@ function Label({ children, icon }: { children: React.ReactNode; icon?: React.Rea
   );
 }
 
+const SLEEP_MIN = 0;
+const SLEEP_MAX = 24;
+
+/** Sleep hours: plain text + ±1 buttons only (no native number spinners). */
+function SleepHoursField({
+  value,
+  onChange,
+}: {
+  value?: number;
+  onChange: (v: number | undefined) => void;
+}) {
+  const base = typeof value === "number" ? value : SLEEP_MIN;
+  const atMin = base <= SLEEP_MIN;
+  const atMax = base >= SLEEP_MAX;
+
+  function setHours(next: number) {
+    const clamped = Math.min(SLEEP_MAX, Math.max(SLEEP_MIN, Math.round(next)));
+    onChange(clamped);
+  }
+
+  function bump(direction: 1 | -1) {
+    setHours(base + direction);
+  }
+
+  return (
+    <div>
+      <Label icon={<Moon size={14} />}>Sleep</Label>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            bump(-1);
+          }}
+          disabled={atMin}
+          className="w-10 h-10 shrink-0 rounded-xl bg-surface-muted text-ink-soft grid place-items-center ring-1 ring-surface-border disabled:opacity-40"
+          aria-label="Decrease sleep by 1 hour"
+        >
+          <Minus size={16} />
+        </button>
+        <div className="relative flex-1 min-w-0">
+          <input
+            className="field pr-12 tabular-nums"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            value={typeof value === "number" ? String(value) : ""}
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, "");
+              if (digits === "") {
+                onChange(undefined);
+                return;
+              }
+              setHours(parseInt(digits, 10));
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                bump(1);
+              } else if (e.key === "ArrowDown") {
+                e.preventDefault();
+                bump(-1);
+              }
+            }}
+            onWheel={(e) => e.preventDefault()}
+            placeholder="7"
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-ink-muted pointer-events-none">
+            hrs
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            bump(1);
+          }}
+          disabled={atMax}
+          className="w-10 h-10 shrink-0 rounded-xl bg-brand-500 text-white grid place-items-center shadow-soft disabled:opacity-40"
+          aria-label="Increase sleep by 1 hour"
+        >
+          <Plus size={16} strokeWidth={2.6} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function NumberField({
   icon,
   label,
@@ -335,12 +416,11 @@ function NumberField({
   placeholder?: string;
   onChange: (v: number | undefined) => void;
 }) {
-  const current = value ?? min;
-  const atMin = current <= min;
-  const atMax = max !== undefined && current >= max;
+  const base = typeof value === "number" ? value : min;
+  const atMin = base <= min;
+  const atMax = max !== undefined && base >= max;
 
   function bump(delta: number) {
-    const base = value ?? min;
     const next = Math.min(max ?? Infinity, Math.max(min, base + delta));
     onChange(next);
   }
@@ -351,7 +431,10 @@ function NumberField({
       <div className="flex items-center gap-1.5">
         <button
           type="button"
-          onClick={() => bump(-step)}
+          onClick={(e) => {
+            e.preventDefault();
+            bump(-step);
+          }}
           disabled={atMin}
           className="w-10 h-10 shrink-0 rounded-xl bg-surface-muted text-ink-soft grid place-items-center ring-1 ring-surface-border disabled:opacity-40"
           aria-label={`Decrease ${label}`}
@@ -360,19 +443,30 @@ function NumberField({
         </button>
         <div className="relative flex-1 min-w-0">
           <input
-            className="field pr-12 tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            type="number"
+            className="field pr-12 tabular-nums"
+            type="text"
             inputMode="numeric"
-            step={step}
-            min={min}
-            max={max}
-            value={value ?? ""}
-            onChange={(e) =>
-              onChange(e.target.value === "" ? undefined : Number(e.target.value))
-            }
-            onKeyDown={(e) => {
-              if (e.key === "PageUp" || e.key === "PageDown") e.preventDefault();
+            autoComplete="off"
+            value={typeof value === "number" ? String(value) : ""}
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, "");
+              if (digits === "") {
+                onChange(undefined);
+                return;
+              }
+              const n = parseInt(digits, 10);
+              onChange(Math.min(max ?? Infinity, Math.max(min, n)));
             }}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                bump(step);
+              } else if (e.key === "ArrowDown") {
+                e.preventDefault();
+                bump(-step);
+              }
+            }}
+            onWheel={(e) => e.preventDefault()}
             placeholder={placeholder}
           />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-ink-muted pointer-events-none">
@@ -381,7 +475,10 @@ function NumberField({
         </div>
         <button
           type="button"
-          onClick={() => bump(step)}
+          onClick={(e) => {
+            e.preventDefault();
+            bump(step);
+          }}
           disabled={atMax}
           className="w-10 h-10 shrink-0 rounded-xl bg-brand-500 text-white grid place-items-center shadow-soft disabled:opacity-40"
           aria-label={`Increase ${label}`}
