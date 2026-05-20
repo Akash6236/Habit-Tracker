@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Droplets, Moon, Notebook, Quote, Sparkles, TrendingUp } from "lucide-react";
+import { Droplets, Minus, Moon, Notebook, Plus, Quote, Sparkles, TrendingUp } from "lucide-react";
 import { db, type DayLog, type Habit, type Category } from "../db/database";
 import { useLive } from "../lib/useLive";
 import { Card, CardHeader } from "../components/ui/Card";
@@ -186,8 +186,10 @@ export function TodayPage({ onGoTo }: Props) {
               label="Sleep"
               unit="hrs"
               value={day?.sleepHours}
-              step={0.5}
-              placeholder="7.5"
+              step={1}
+              min={0}
+              max={24}
+              placeholder="7"
               onChange={(v) => patchDay({ sleepHours: v })}
             />
             <NumberField
@@ -317,7 +319,9 @@ function NumberField({
   label,
   unit,
   value,
-  step,
+  step = 1,
+  min = 0,
+  max,
   placeholder,
   onChange,
 }: {
@@ -326,25 +330,64 @@ function NumberField({
   unit: string;
   value?: number;
   step?: number;
+  min?: number;
+  max?: number;
   placeholder?: string;
   onChange: (v: number | undefined) => void;
 }) {
+  const current = value ?? min;
+  const atMin = current <= min;
+  const atMax = max !== undefined && current >= max;
+
+  function bump(delta: number) {
+    const base = value ?? min;
+    const next = Math.min(max ?? Infinity, Math.max(min, base + delta));
+    onChange(next);
+  }
+
   return (
     <div>
       <Label icon={icon}>{label}</Label>
-      <div className="relative">
-        <input
-          className="field pr-12 tabular-nums"
-          type="number"
-          inputMode="decimal"
-          step={step}
-          value={value ?? ""}
-          onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))}
-          placeholder={placeholder}
-        />
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-ink-muted pointer-events-none">
-          {unit}
-        </span>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => bump(-step)}
+          disabled={atMin}
+          className="w-10 h-10 shrink-0 rounded-xl bg-surface-muted text-ink-soft grid place-items-center ring-1 ring-surface-border disabled:opacity-40"
+          aria-label={`Decrease ${label}`}
+        >
+          <Minus size={16} />
+        </button>
+        <div className="relative flex-1 min-w-0">
+          <input
+            className="field pr-12 tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            type="number"
+            inputMode="numeric"
+            step={step}
+            min={min}
+            max={max}
+            value={value ?? ""}
+            onChange={(e) =>
+              onChange(e.target.value === "" ? undefined : Number(e.target.value))
+            }
+            onKeyDown={(e) => {
+              if (e.key === "PageUp" || e.key === "PageDown") e.preventDefault();
+            }}
+            placeholder={placeholder}
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-ink-muted pointer-events-none">
+            {unit}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => bump(step)}
+          disabled={atMax}
+          className="w-10 h-10 shrink-0 rounded-xl bg-brand-500 text-white grid place-items-center shadow-soft disabled:opacity-40"
+          aria-label={`Increase ${label}`}
+        >
+          <Plus size={16} strokeWidth={2.6} />
+        </button>
       </div>
     </div>
   );
