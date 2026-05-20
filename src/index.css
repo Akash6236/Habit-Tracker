@@ -259,6 +259,14 @@ html.dark .btn-soft:hover { background: rgb(var(--brand-500) / 0.18); }
 
 /* ─── Forms ─── */
 
+/* Allow typing inside habit cards on mobile (parent touch styles won’t block inputs) */
+.card input,
+.card textarea {
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: manipulation;
+}
+
 .field {
   width: 100%;
   background: rgb(var(--surface) / 0.7);

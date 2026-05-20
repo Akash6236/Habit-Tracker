@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Minus, Plus } from "lucide-react";
+import { Check } from "lucide-react";
 import { db, type Habit, type Entry } from "../db/database";
 import { entryScore } from "../lib/stats";
 import { lastNDates } from "../lib/date";
 import { Sparkline } from "./ui/Sparkline";
 import { StreakBadge } from "./ui/StreakBadge";
 import { IconTile } from "./ui/IconTile";
+import { StepperInput } from "./ui/StepperInput";
 import { cn } from "../lib/cn";
 
 interface Props {
@@ -148,16 +149,33 @@ export function HabitCard({ habit, date, categoryColor, onChanged }: Props) {
           </p>
         </div>
 
-        {habit.type !== "duration" && (
+        {(habit.type === "boolean" || habit.type === "scale") && (
           <div className="shrink-0">
             <Controls habit={habit} entry={entry} done={done} onSave={save} grad={grad} />
           </div>
         )}
       </div>
 
-      {habit.type === "duration" && (
+      {(habit.type === "duration" || habit.type === "counter") && (
         <div className="pl-14">
-          <DurationValueControl habit={habit} value={entry?.value ?? 0} onSave={save} grad={grad} />
+          <StepperInput
+            value={entry?.value ?? 0}
+            onChange={save}
+            step={
+              habit.type === "duration"
+                ? 1
+                : Math.max(1, Math.round((habit.target ?? 10) / 10))
+            }
+            max={Math.min(
+              100_000,
+              Math.max((habit.target ?? 60) * 5, habit.type === "duration" ? 60 : 1000)
+            )}
+            unit={habit.unit?.trim()}
+            placeholder={habit.target ? String(habit.target) : "0"}
+            plusGradient={grad}
+            ariaLabel={habit.name}
+            className="max-w-[240px]"
+          />
         </div>
       )}
 
@@ -262,143 +280,5 @@ function Controls({
       </div>
     );
   }
-  // counter — +/- only; duration uses DurationValueControl below the card header
-  const step = Math.max(1, Math.round((habit.target ?? 10) / 10));
-  const v = entry?.value ?? 0;
-  return (
-    <div className="flex items-center gap-1.5">
-      <motion.button
-        whileTap={{ scale: 0.9 }}
-        onClick={() => onSave(Math.max(0, v - step))}
-        className="w-9 h-9 rounded-xl bg-surface-muted text-ink-soft grid place-items-center ring-1 ring-surface-border"
-        aria-label={`Subtract ${step}`}
-      >
-        <Minus size={16} />
-      </motion.button>
-      <span className="font-mono text-sm font-semibold tabular-nums w-10 text-center">{v}</span>
-      <motion.button
-        whileTap={{ scale: 0.9 }}
-        onClick={() => onSave(v + step)}
-        className="w-9 h-9 rounded-xl text-white grid place-items-center shadow-soft"
-        style={{ background: `linear-gradient(135deg, ${grad[0]}, ${grad[1]})` }}
-        aria-label={`Add ${step}`}
-      >
-        <Plus size={16} strokeWidth={2.6} />
-      </motion.button>
-    </div>
-  );
-}
-
-/** Duration habits: type a value or use +/-1 (all categories). */
-function DurationValueControl({
-  habit,
-  value,
-  onSave,
-  grad,
-}: {
-  habit: Habit;
-  value: number;
-  onSave: (v: number) => void;
-  grad: [string, string];
-}) {
-  const step = 1;
-  const max = Math.min(10_000, Math.max((habit.target ?? 60) * 5, 60));
-  const unit = habit.unit?.trim();
-
-  const [text, setText] = useState(value > 0 ? String(value) : "");
-
-  useEffect(() => {
-    setText(value > 0 ? String(value) : "");
-  }, [value]);
-
-  function clamp(n: number) {
-    return Math.min(max, Math.max(0, Math.round(n)));
-  }
-
-  function apply(n: number) {
-    const next = clamp(n);
-    onSave(next);
-    setText(next > 0 ? String(next) : "");
-  }
-
-  function commitInput(raw: string) {
-    const digits = raw.replace(/\D/g, "");
-    if (digits === "") {
-      onSave(0);
-      setText("");
-      return;
-    }
-    apply(parseInt(digits, 10));
-  }
-
-  function bump(delta: number) {
-    apply(value + delta);
-  }
-
-  return (
-    <div className="flex items-center gap-1.5 w-full max-w-[220px]">
-      <motion.button
-        type="button"
-        whileTap={{ scale: 0.9 }}
-        onClick={(e) => {
-          e.preventDefault();
-          bump(-step);
-        }}
-        disabled={value <= 0}
-        className="w-9 h-9 shrink-0 rounded-xl bg-surface-muted text-ink-soft grid place-items-center ring-1 ring-surface-border disabled:opacity-40"
-        aria-label={`Decrease ${habit.name} by ${step}`}
-      >
-        <Minus size={16} />
-      </motion.button>
-      <div className="relative flex-1 min-w-0">
-        <input
-          className={cn(
-            "field h-9 !py-1.5 text-center text-sm tabular-nums w-full",
-            unit && "pr-9"
-          )}
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          placeholder={habit.target ? String(habit.target) : "0"}
-          value={text}
-          onChange={(e) => setText(e.target.value.replace(/\D/g, ""))}
-          onBlur={() => commitInput(text)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commitInput(text);
-              (e.target as HTMLInputElement).blur();
-            } else if (e.key === "ArrowUp") {
-              e.preventDefault();
-              bump(step);
-            } else if (e.key === "ArrowDown") {
-              e.preventDefault();
-              bump(-step);
-            }
-          }}
-          onWheel={(e) => e.preventDefault()}
-          aria-label={`${habit.name} amount${unit ? ` in ${unit}` : ""}`}
-        />
-        {unit && (
-          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-ink-muted pointer-events-none">
-            {unit}
-          </span>
-        )}
-      </div>
-      <motion.button
-        type="button"
-        whileTap={{ scale: 0.9 }}
-        onClick={(e) => {
-          e.preventDefault();
-          bump(step);
-        }}
-        disabled={value >= max}
-        className="w-9 h-9 shrink-0 rounded-xl text-white grid place-items-center shadow-soft disabled:opacity-40"
-        style={{ background: `linear-gradient(135deg, ${grad[0]}, ${grad[1]})` }}
-        aria-label={`Increase ${habit.name} by ${step}`}
-      >
-        <Plus size={16} strokeWidth={2.6} />
-      </motion.button>
-    </div>
-  );
+  return null;
 }
